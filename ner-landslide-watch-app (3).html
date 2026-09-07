@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NER Landslide Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1420; --bg-2:#101E30;
+    --panel:#132436; --panel-2:#1A3044;
+    --line:#24425C;
+    --ink:#E8F1FA; --ink-dim:#8FA9BF;
+    --moss:#5CC08D; --clay:#E0955F;
+    --low:#4FAE73; --mod:#DDAE4A; --high:#E58B45; --severe:#E5564B;
+    --el-rain:#4FA8E0; --el-soil:#C68B4C; --el-vibe:#A688E0; --el-slope:#E08A50; --el-temp:#E06B85; --el-humid:#3FC7AE;
+    --mono:'JetBrains Mono', monospace; --sans:'Space Grotesk', sans-serif; --serif:'Fraunces', serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(92,192,141,0.10), transparent 60%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5; min-height:100vh;
+  }
+  a{color:inherit;}
+  button{font-family:var(--sans);}
+
+  /* ---- shared top bar ---- */
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:16px 28px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:rgba(11,20,32,0.92);backdrop-filter:blur(6px);z-index:60;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(155deg,var(--moss),#3F6B4D);flex-shrink:0;}
+  .brand-text h1{font-size:15.5px;margin:0;font-weight:600;}
+  .brand-text p{margin:0;font-size:11.5px;color:var(--ink-dim);}
+
+  .mode-switch{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px;}
+  .mode-btn{border:none;background:transparent;color:var(--ink-dim);padding:8px 16px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .mode-btn.active{background:rgba(127,174,140,0.16);color:var(--moss);}
+
+  .topbar-right{display:flex;align-items:center;gap:14px;}
+  .live-dot{display:flex;align-items:center;gap:7px;color:var(--low);font-family:var(--mono);font-size:11.5px;}
+  .live-dot .dot{width:7px;height:7px;border-radius:50%;background:var(--low);animation:pulse 2s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,154,99,0.55);}70%{box-shadow:0 0 0 7px rgba(79,154,99,0);}100%{box-shadow:0 0 0 0 rgba(79,154,99,0);}}
+  .gear-btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:15px;}
+  .gear-btn:hover{color:var(--moss);border-color:var(--moss);}
+
+  /* ---- settings drawer ---- */
+  #configPanel{
+    display:none;position:fixed;top:64px;right:22px;width:290px;z-index:70;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;
+    box-shadow:0 16px 40px rgba(0,0,0,0.4);
+  }
+  #configPanel h3{margin:0 0 14px;font-size:13.5px;}
+  .cfg-row{margin-bottom:14px;}
+  .cfg-row label{display:block;font-size:11.5px;color:var(--ink-dim);margin-bottom:6px;}
+  .cfg-row select, .cfg-row input[type=range]{width:100%;}
+  .cfg-row select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:7px 9px;font-family:var(--sans);font-size:12.5px;}
+  .cfg-value{font-family:var(--mono);font-size:11.5px;color:var(--moss);float:right;}
+  .cfg-toggle-row{display:flex;gap:8px;}
+  .cfg-toggle{flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);padding:7px;border-radius:7px;font-size:12px;cursor:pointer;}
+  .cfg-toggle.active{background:rgba(127,174,140,0.16);color:var(--moss);border-color:var(--moss);}
+
+  /* ---- emergency bar ---- */
+  .emergency-bar{
+    background:linear-gradient(90deg, rgba(196,68,58,0.14), rgba(196,68,58,0.04));
+    border-bottom:1px solid var(--line);padding:10px 28px;
+    display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap;
+    font-size:12.5px;font-family:var(--mono);
+  }
+  .emergency-bar .item{display:flex;align-items:center;gap:7px;color:var(--ink-dim);}
+  .emergency-bar a{color:var(--severe);text-decoration:none;font-weight:600;}
+  .emergency-bar a:hover{text-decoration:underline;}
+  .emergency-bar button{background:var(--severe);color:#fff;border:none;border-radius:7px;padding:7px 13px;font-family:var(--mono);font-size:11.5px;font-weight:600;cursor:pointer;}
+  .emergency-bar button:hover{opacity:0.9;}
+
+  /* ---- toasts ---- */
+  #toastWrap{position:fixed;top:78px;right:22px;z-index:100;display:flex;flex-direction:column;gap:10px;width:300px;}
+  .toast{background:var(--panel);border:1px solid var(--severe);border-left:4px solid var(--severe);border-radius:9px;padding:12px 14px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,0.35);animation:slideIn 0.25s ease;}
+  .toast.mod{border-color:var(--mod);border-left-color:var(--mod);}
+  .toast .t-head{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin-bottom:3px;}
+  .toast .t-close{cursor:pointer;color:var(--ink-dim);font-size:14px;}
+  @keyframes slideIn{from{transform:translateX(20px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+  main{max-width:1320px;margin:0 auto;padding:30px 28px 70px;}
+  .hint{font-size:12px;color:var(--ink-dim);margin:0 0 16px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;}
+  .panel h2{margin:0 0 4px;font-size:15px;font-weight:600;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:10.5px;font-family:var(--mono);font-weight:600;}
+  .badge.low, .risk-pill.low{background:rgba(79,154,99,0.18);color:var(--low);}
+  .badge.mod, .risk-pill.mod{background:rgba(214,162,60,0.18);color:var(--mod);}
+  .badge.high, .risk-pill.high{background:rgba(219,122,46,0.18);color:var(--high);}
+  .badge.severe, .risk-pill.severe{background:rgba(196,68,58,0.20);color:var(--severe);}
+
+  /* ---- THE 6 ELEMENTS hero ---- */
+  .elements-hero{max-width:1320px;margin:0 auto;padding:32px 28px 6px;}
+  .el-title-wrap{text-align:center;margin-bottom:22px;}
+  .el-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:2.5px;color:var(--ink-dim);margin-bottom:10px;}
+  .el-title{
+    font-family:var(--serif);font-weight:600;font-size:clamp(26px,4vw,42px);margin:0;letter-spacing:-0.5px;
+    display:inline-block;position:relative;padding:2px 6px;
+    background:linear-gradient(90deg,var(--el-rain),var(--el-soil),var(--el-vibe),var(--el-slope),var(--el-temp),var(--el-humid));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .el-title::after{
+    content:'';position:absolute;left:0;right:0;bottom:-6px;height:3px;border-radius:3px;
+    background:linear-gradient(90deg,var(--el-rain),var(--el-soil),var(--el-vibe),var(--el-slope),var(--el-temp),var(--el-humid));
+  }
+  .el-sub{font-size:13px;color:var(--ink-dim);margin:16px auto 0;max-width:560px;}
+  .el-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:8px;}
+  @media (max-width:980px){.el-grid{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:600px){.el-grid{grid-template-columns:repeat(2,1fr);}}
+  .el-card{
+    position:relative;overflow:hidden;border:1px solid var(--line);border-radius:12px;padding:16px 14px 14px;
+    background:var(--panel);transition:transform .15s ease,border-color .15s ease;
+  }
+  .el-card:hover{transform:translateY(-3px);}
+  .el-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--el-color,var(--moss));}
+  .el-card .el-icon{font-size:20px;margin-bottom:10px;display:block;}
+  .el-card .el-num{font-family:var(--mono);font-size:10.5px;color:var(--el-color,var(--ink-dim));font-weight:700;letter-spacing:1px;margin-bottom:4px;}
+  .el-card .el-name{font-size:13px;font-weight:600;margin-bottom:4px;}
+  .el-card .el-desc{font-size:11px;color:var(--ink-dim);line-height:1.45;}
+  .el-card.c1{--el-color:var(--el-rain);} .el-card.c2{--el-color:var(--el-soil);} .el-card.c3{--el-color:var(--el-vibe);}
+  .el-card.c4{--el-color:var(--el-slope);} .el-card.c5{--el-color:var(--el-temp);} .el-card.c6{--el-color:var(--el-humid);}
+  .el-card.c1{background:linear-gradient(160deg, rgba(76,155,217,0.10), var(--panel) 55%);}
+  .el-card.c2{background:linear-gradient(160deg, rgba(180,118,59,0.10), var(--panel) 55%);}
+  .el-card.c3{background:linear-gradient(160deg, rgba(155,111,209,0.10), var(--panel) 55%);}
+  .el-card.c4{background:linear-gradient(160deg, rgba(217,122,63,0.10), var(--panel) 55%);}
+  .el-card.c5{background:linear-gradient(160deg, rgba(217,80,107,0.10), var(--panel) 55%);}
+  .el-card.c6{background:linear-gradient(160deg, rgba(63,179,155,0.10), var(--panel) 55%);}
+
+  /* ---- Google-Maps-style location search ---- */
+  .maps-search{position:relative;margin-top:16px;}
+  .maps-search-row{display:flex;align-items:center;gap:10px;}
+  .maps-input-wrap{
+    flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-2);border:1px solid var(--line);
+    border-radius:24px;padding:11px 16px;box-shadow:0 2px 10px rgba(0,0,0,0.18);
+  }
+  .maps-input-wrap:focus-within{border-color:var(--moss);}
+  .maps-input-wrap svg{flex-shrink:0;color:var(--ink-dim);}
+  .maps-input-wrap input{
+    flex:1;border:none;background:transparent;outline:none;color:var(--ink);font-family:var(--sans);font-size:13.5px;
+  }
+  .maps-input-wrap input::placeholder{color:var(--ink-dim);}
+  .maps-clear{cursor:pointer;color:var(--ink-dim);font-size:15px;display:none;flex-shrink:0;}
+  .maps-locate-btn{
+    flex-shrink:0;width:42px;height:42px;border-radius:50%;background:var(--bg-2);border:1px solid var(--line);
+    color:var(--moss);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.18);
+  }
+  .maps-locate-btn:hover{border-color:var(--moss);}
+  .maps-locate-btn.active{background:rgba(127,174,140,0.16);}
+  .maps-suggestions{
+    display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,0.4);z-index:40;overflow:hidden;
+  }
+  .maps-suggestions.open{display:block;}
+  .maps-sugg-item{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--line);}
+  .maps-sugg-item:last-child{border-bottom:none;}
+  .maps-sugg-item:hover, .maps-sugg-item.hi{background:var(--panel-2);}
+  .maps-sugg-item .pin{width:30px;height:30px;border-radius:50%;background:var(--panel-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--moss);}
+  .maps-sugg-item .sugg-text{flex:1;min-width:0;}
+  .maps-sugg-item .sugg-main{font-size:13px;font-weight:600;}
+  .maps-sugg-item .sugg-sub{font-size:11.5px;color:var(--ink-dim);}
+  .maps-sugg-item .sugg-risk{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:100px;flex-shrink:0;}
+  .maps-sugg-empty{padding:16px;text-align:center;font-size:12.5px;color:var(--ink-dim);}
+  .chosen-pill{
+    display:none;align-items:center;gap:8px;margin-top:12px;background:rgba(127,174,140,0.12);border:1px solid var(--moss);
+    color:var(--moss);border-radius:100px;padding:7px 14px;font-size:12.5px;width:fit-content;
+  }
+  .chosen-pill.show{display:flex;}
+
+  /* ===================== ADMIN VIEW ===================== */
+  #adminView .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
+  #adminView .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;}
+  #adminView .stat .label{font-size:11.5px;color:var(--ink-dim);margin-bottom:8px;}
+  #adminView .stat .value{font-family:var(--mono);font-size:24px;font-weight:600;}
+  #adminView .stat .sub{font-size:11.5px;color:var(--ink-dim);margin-top:4px;}
+  #adminView .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start;}
+  @media (max-width:980px){#adminView .grid{grid-template-columns:1fr;} #adminView .stats{grid-template-columns:repeat(2,1fr);}}
+  .map-tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .map-tab{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer;}
+  .map-tab.active{background:rgba(127,174,140,0.14);color:var(--moss);border-color:var(--moss);}
+  .map-wrap{position:relative;}
+  svg#nerMap{width:100%;height:auto;display:block;}
+  .station-dot{cursor:pointer;}
+  .station-label{font-family:var(--mono);font-size:9px;fill:var(--ink-dim);pointer-events:none;}
+  .legend{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-dim);font-family:var(--mono);}
+  .legend-item .sw{width:9px;height:9px;border-radius:50%;}
+  #mapPane{width:100%;height:420px;border-radius:10px;overflow:hidden;position:relative;background:#BEE3F8;display:none;border:1px solid var(--line);}
+  #leafletMap{width:100%;height:100%;background:#BEE3F8;}
+  .leaflet-container{background:#BEE3F8 !important;font-family:var(--sans) !important;}
+  .gmap-badge{
+    position:absolute;top:12px;left:12px;z-index:500;background:rgba(16,22,15,0.88);backdrop-filter:blur(4px);
+    color:var(--ink);font-family:var(--mono);font-size:12px;font-weight:600;padding:6px 13px;border-radius:100px;
+    border:1px solid var(--line);pointer-events:none;
+  }
+  .gmap-zoom{position:absolute;top:12px;right:12px;z-index:500;display:flex;flex-direction:column;border-radius:9px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.4);}
+  .gmap-zoom button{width:34px;height:34px;background:rgba(23,31,22,0.94);border:none;border-bottom:1px solid var(--line);color:var(--ink);font-size:15px;cursor:pointer;line-height:1;}
+  .gmap-zoom button:last-child{border-bottom:none;}
+  .gmap-zoom button:hover{background:var(--panel-2);color:var(--moss);}
+  .gmap-label{
+    position:absolute;left:12px;bottom:58px;z-index:500;max-width:72%;background:rgba(16,22,15,0.88);backdrop-filter:blur(4px);
+    border:1px solid var(--line);border-radius:10px;padding:9px 13px;
+  }
+  .gmap-label .gl-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .gmap-label .gl-dot{width:9px;height:9px;border-radius:50%;background:var(--moss);flex-shrink:0;box-shadow:0 0 0 3px rgba(127,174,140,0.22);}
+  .gmap-label .gl-sub{font-size:11px;color:var(--ink-dim);margin-top:3px;font-family:var(--mono);}
+  .gmap-open{
+    position:absolute;right:12px;bottom:12px;z-index:500;display:flex;align-items:center;gap:7px;
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);text-decoration:none;
+    font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:100px;box-shadow:0 8px 20px rgba(0,0,0,0.4);
+  }
+  .gmap-open:hover{border-color:var(--moss);color:var(--moss);}
+  .gmap-pin-wrap{position:relative;width:34px;height:46px;}
+  .gmap-pin-pulse{position:absolute;left:50%;bottom:2px;width:16px;height:16px;border-radius:50%;transform:translateX(-50%);animation:gmapPulse 2s infinite;}
+  @keyframes gmapPulse{0%{box-shadow:0 0 0 0 rgba(219,122,46,0.55);}70%{box-shadow:0 0 0 12px rgba(219,122,46,0);}100%{box-shadow:0 0 0 0 rgba(219,122,46,0);}}
+
+  .station-name{font-size:18px;font-weight:600;margin:0;}
+  .station-meta{font-size:12px;color:var(--ink-dim);margin:2px 0 16px;}
+  .risk-ring-wrap{display:flex;align-items:center;gap:16px;margin-bottom:18px;}
+  .readouts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .readout{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+  .readout .rl{font-size:10.5px;color:var(--ink-dim);}
+  .readout .rv{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:2px;}
+  .sat-note{background:var(--panel-2);border:1px dashed var(--line);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--ink-dim);line-height:1.5;}
+  .sat-note b{color:var(--ink);}
+  .lower-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:16px;margin-top:16px;}
+  @media (max-width:980px){.lower-grid{grid-template-columns:1fr;}}
+  .alert-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .alert-row:last-child{border-bottom:none;}
+  .alert-time{font-family:var(--mono);color:var(--ink-dim);white-space:nowrap;font-size:11px;padding-top:1px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--ink-dim);font-weight:500;font-size:11px;padding:6px 8px;border-bottom:1px solid var(--line);}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  tr.selected{background:rgba(127,174,140,0.06);}
+  tr{cursor:pointer;}
+
+  /* ===================== PUBLIC VIEW ===================== */
+  #publicView .inner{max-width:920px;margin:0 auto;}
+  #publicView .hero{padding:44px 0 30px;}
+  #publicView .eyebrow{font-size:12.5px;color:var(--moss);margin-bottom:14px;}
+  #publicView h1{font-family:var(--serif);font-weight:600;font-size:38px;line-height:1.15;margin:0 0 16px;max-width:600px;letter-spacing:-0.3px;}
+  #publicView p.lead{font-size:15.5px;color:var(--ink-dim);max-width:520px;margin:0;}
+  #publicView .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;}
+  #publicView .card h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:0 0 6px;}
+  #publicView .card .hint{margin:0 0 22px;}
+  .upload-zone{border:1.5px dashed var(--line);border-radius:12px;padding:26px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;cursor:pointer;background:var(--bg-2);}
+  .upload-zone:hover{border-color:var(--moss);}
+  .upload-zone input{display:none;}
+  .upload-zone .u-title{font-weight:600;font-size:14px;}
+  .upload-zone .u-sub{font-size:12.5px;color:var(--ink-dim);}
+  #preview{max-width:100%;max-height:200px;border-radius:8px;display:none;margin-top:6px;}
+  .loc-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  #publicView select, .gps{background:var(--bg-2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 14px;font-family:var(--sans);font-size:13.5px;cursor:pointer;}
+  #publicView select{flex:1;min-width:200px;}
+  .gps{display:flex;align-items:center;gap:7px;white-space:nowrap;}
+  .primary-btn{margin-top:20px;width:100%;padding:14px;border:none;border-radius:10px;background:var(--moss);color:#0E140D;font-weight:600;font-size:14.5px;cursor:pointer;}
+  .primary-btn:hover{opacity:0.92;}
+  .primary-btn:disabled{opacity:0.5;cursor:not-allowed;}
+  #results{display:none;margin-top:26px;padding-top:26px;border-top:1px solid var(--line);}
+  .res-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;}
+  .res-loc h3{margin:0 0 3px;font-size:17px;font-weight:600;}
+  .res-loc p{margin:0;font-size:12.5px;color:var(--ink-dim);}
+  .risk-pill{padding:8px 16px;border-radius:100px;font-weight:600;font-size:13px;white-space:nowrap;}
+  .metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px;}
+  @media (max-width:600px){.metric-row{grid-template-columns:1fr 1fr;}}
+  .metric{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .metric .m-label{font-size:11px;color:var(--ink-dim);}
+  .metric .m-value{font-size:20px;font-weight:600;margin-top:4px;}
+  .advice{margin-top:20px;background:var(--bg-2);border-left:3px solid var(--moss);border-radius:0 10px 10px 0;padding:14px 16px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;}
+  .advice b{color:var(--ink);}
+  .alert-banner{display:none;margin-top:16px;padding:14px 16px;border-radius:10px;background:rgba(196,68,58,0.14);border:1px solid var(--severe);font-size:13px;line-height:1.6;}
+  .alert-banner b{color:var(--severe);}
+  .alert-banner .contacts{margin-top:8px;}
+  .alert-banner .contacts a{color:var(--ink);font-weight:600;text-decoration:underline;margin-right:16px;}
+
+  footer{max-width:1320px;margin:0 auto;padding:20px 28px 40px;font-size:11.5px;color:var(--ink-dim);line-height:1.6;}
+  footer .tag{font-family:var(--mono);color:var(--moss);}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark"></div>
+    <div class="brand-text">
+      <h1>NER Landslide Watch</h1>
+      <p id="brandSub">Monitoring Console — Team View</p>
+    </div>
+  </div>
+
+  <div class="mode-switch">
+    <button class="mode-btn active" id="modeAdminBtn" onclick="setMode('admin')">Team / Admin</button>
+    <button class="mode-btn" id="modePublicBtn" onclick="setMode('public')">Public site</button>
+  </div>
+
+  <div class="topbar-right">
+    <div class="live-dot"><span class="dot"></span> LIVE</div>
+    <div id="clock" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);">--:--:--</div>
+    <button class="gear-btn" id="gearBtn" onclick="toggleConfig()">⚙</button>
+  </div>
+</header>
+
+<div id="configPanel">
+  <h3>Configuration</h3>
+  <div class="cfg-row">
+    <label>Alert threshold <span class="cfg-value" id="threshVal">50%</span></label>
+    <input type="range" id="threshSlider" min="25" max="90" step="5" value="50">
+  </div>
+  <div class="cfg-row">
+    <label>Live data refresh rate</label>
+    <select id="refreshSelect">
+      <option value="15000">Every 15 seconds</option>
+      <option value="45000" selected>Every 45 seconds</option>
+      <option value="120000">Every 2 minutes</option>
+    </select>
+  </div>
+  <div class="cfg-row">
+    <label>Temperature unit</label>
+    <div class="cfg-toggle-row">
+      <button class="cfg-toggle active" id="unitC" onclick="setUnit('C')">°C</button>
+      <button class="cfg-toggle" id="unitF" onclick="setUnit('F')">°F</button>
+    </div>
+  </div>
+  <div class="cfg-row" style="margin-bottom:0;">
+    <label>Default view on open</label>
+    <div class="cfg-toggle-row">
+      <button class="cfg-toggle active" id="defAdmin" onclick="setDefaultMode('admin')">Admin</button>
+      <button class="cfg-toggle" id="defPublic" onclick="setDefaultMode('public')">Public</button>
+    </div>
+  </div>
+</div>
+
+<div class="emergency-bar">
+  <div class="item">🚨 National: <a href="tel:112">112</a> · Disaster Control Room: <a href="tel:1070">1070</a></div>
+  <div class="item">Project contact: <a href="mailto:yashpandey-extc@atharvacoe.ac.in">yashpandey-extc@atharvacoe.ac.in</a></div>
+  <button id="testAlertBtn">Send test alert email</button>
+</div>
+
+<div id="toastWrap"></div>
+
+<section class="elements-hero">
+  <div class="el-title-wrap">
+    <div class="el-eyebrow">WHAT THE MODEL WATCHES</div>
+    <h2 class="el-title">THE 6 ELEMENTS</h2>
+    <p class="el-sub">Every station's cracking probability is built from six live signals — each tracked, colour-coded and weighted differently in the risk model below.</p>
+  </div>
+  <div class="el-grid">
+    <div class="el-card c1"><span class="el-icon">🌧️</span><div class="el-num">01 · WEIGHT 35%</div><div class="el-name">Rainfall</div><div class="el-desc">Live hourly precipitation at each station's real coordinates.</div></div>
+    <div class="el-card c2"><span class="el-icon">🟤</span><div class="el-num">02 · WEIGHT 25%</div><div class="el-name">Soil Moisture</div><div class="el-desc">Simulated saturation of slope soil, rising with sustained rain.</div></div>
+    <div class="el-card c3"><span class="el-icon">📳</span><div class="el-num">03 · WEIGHT 20%</div><div class="el-name">Ground Vibration</div><div class="el-desc">Simulated micro-tremor and settling activity at the slope.</div></div>
+    <div class="el-card c4"><span class="el-icon">⛰️</span><div class="el-num">04 · WEIGHT 20%</div><div class="el-name">Slope Angle</div><div class="el-desc">Fixed terrain steepness for each monitored zone.</div></div>
+    <div class="el-card c5"><span class="el-icon">🌡️</span><div class="el-num">05 · CONTEXT</div><div class="el-name">Temperature</div><div class="el-desc">Live surface temperature, tracked for trend context.</div></div>
+    <div class="el-card c6"><span class="el-icon">💧</span><div class="el-num">06 · CONTEXT</div><div class="el-name">Humidity</div><div class="el-desc">Live relative humidity, an early signal of saturating air.</div></div>
+  </div>
+</section>
+
+<main>
+
+  <!-- ===================== ADMIN VIEW ===================== -->
+  <div id="adminView">
+    <div class="stats">
+      <div class="stat"><div class="label">ACTIVE STATIONS</div><div class="value">8</div><div class="sub">across 7 NER states</div></div>
+      <div class="stat"><div class="label">HIGHEST RISK ZONE</div><div class="value" id="statHighest">—</div><div class="sub" id="statHighestPct">calculating…</div></div>
+      <div class="stat"><div class="label">ZONES IN ALERT</div><div class="value" id="statAlertCount">0</div><div class="sub" id="statAlertSub">≥ 50% risk</div></div>
+      <div class="stat"><div class="label">LAST SATELLITE PASS</div><div class="value" id="statSat">—</div><div class="sub">simulated overpass</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Regional risk map</h2>
+        <p class="hint">Click a station to view live readouts and cracking probability.</p>
+        <div class="map-tabs">
+          <div class="map-tab active" id="tab2d" onclick="showMapTab('2d')">2D risk map</div>
+          <div class="map-tab" id="tabMap" onclick="showMapTab('map')">Map view</div>
+        </div>
+        <div class="map-wrap" id="map2dWrap">
+          <svg id="nerMap" viewBox="0 0 640 460" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div id="mapPane">
+          <div id="leafletMap"></div>
+          <div class="gmap-badge" id="gmapBadge">— km</div>
+          <div class="gmap-zoom">
+            <button id="gmapZoomIn" title="Zoom in">＋</button>
+            <button id="gmapZoomOut" title="Zoom out">－</button>
+          </div>
+          <div class="gmap-label" id="gmapLabel">
+            <div class="gl-name"><span class="gl-dot" id="gmapDot"></span><span id="gmapName">—</span></div>
+            <div class="gl-sub" id="gmapSub">—</div>
+          </div>
+          <a class="gmap-open" id="gmapOpen" href="#" target="_blank" rel="noopener">
+            <span class="pin-emoji">📍</span> Open in Maps
+          </a>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="sw" style="background:var(--low)"></span> Low</div>
+          <div class="legend-item"><span class="sw" style="background:var(--mod)"></span> Moderate</div>
+          <div class="legend-item"><span class="sw" style="background:var(--high)"></span> High</div>
+          <div class="legend-item"><span class="sw" style="background:var(--severe)"></span> Severe</div>
+        </div>
+      </div>
+      <div class="panel" id="detailPanel"></div>
+    </div>
+
+    <div class="lower-grid">
+      <div class="panel">
+        <h2>Alert log</h2>
+        <p class="hint">Auto-generated when a station crosses your configured alert threshold.</p>
+        <div id="alertLog"></div>
+      </div>
+      <div class="panel">
+        <h2>All stations</h2>
+        <p class="hint">Sorted by cracking probability, highest first.</p>
+        <table><thead><tr><th>Station</th><th>State</th><th>Rain (mm/h)</th><th>Risk</th></tr></thead><tbody id="stationTable"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PUBLIC VIEW ===================== -->
+  <div id="publicView" style="display:none;">
+    <div class="inner">
+      <div class="hero">
+        <div class="eyebrow">EARLY WARNING · NORTH-EASTERN REGION</div>
+        <h1>See the risk on the slope above your home.</h1>
+        <p class="lead">Choose your area, or use your location, and get a climate and landslide-risk reading in seconds.</p>
+      </div>
+
+      <div class="card">
+        <h2>Check a location</h2>
+        <p class="hint">Add a photo (optional) and pick the area closest to the slope you're worried about.</p>
+
+        <label class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept="image/*">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8FBE99" stroke-width="1.5"><path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2 1.586-1.586a2 2 0 0 1 2.828 0L20 14M4 8h.01M4 20h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+          <div class="u-title">Click to add a photo of the mountain</div>
+          <div class="u-sub">Used to confirm the slope you mean — not analysed pixel-by-pixel in this demo</div>
+          <img id="preview">
+        </label>
+
+        <div class="maps-search" id="mapsSearch">
+          <div class="maps-search-row">
+            <div class="maps-input-wrap">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" id="locInput" placeholder="Search your area — e.g. Kohima, Sohra…" autocomplete="off">
+              <span class="maps-clear" id="locClear">✕</span>
+            </div>
+            <div class="maps-locate-btn" id="gpsBtn" title="Use my current location">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            </div>
+          </div>
+          <div class="maps-suggestions" id="locSuggestions"></div>
+          <div class="chosen-pill" id="chosenPill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+            <span id="chosenPillText"></span>
+          </div>
+        </div>
+
+        <button class="primary-btn" id="checkBtn">Check landslide risk</button>
+
+        <div id="results">
+          <div class="res-top">
+            <div class="res-loc"><h3 id="resName">—</h3><p id="resCoords">—</p></div>
+            <div class="risk-pill" id="resPill">—</div>
+          </div>
+          <div class="metric-row">
+            <div class="metric"><div class="m-label">TEMPERATURE NOW</div><div class="m-value" id="resTemp">—</div></div>
+            <div class="metric"><div class="m-label">RAINFALL (LAST HR)</div><div class="m-value" id="resRain">—</div></div>
+            <div class="metric"><div class="m-label">CRACKING PROBABILITY</div><div class="m-value" id="resRisk">—</div></div>
+          </div>
+          <div class="advice" id="resAdvice"></div>
+          <div class="alert-banner" id="alertBanner">
+            <div>⚠ <b>This reading has crossed the alert threshold.</b> If you notice new ground cracks, tilting trees/poles, or sudden muddy water near this slope, move away and act now.</div>
+            <div class="contacts">
+              📞 <a href="tel:112">Call 112</a>
+              📞 <a href="tel:1070">Call 1070</a>
+              ✉️ <a href="mailto:yashpandey-extc@atharvacoe.ac.in?subject=Landslide%20risk%20report">Email the project team</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p><span class="tag">PROTOTYPE NOTICE —</span> Rainfall and temperature are pulled live from the Open-Meteo public weather API for each location's real coordinates. Soil moisture, ground vibration, slope angle and satellite-pass details are simulated for this demo. Risk probability is a simple illustrative weighted model, not a validated geotechnical forecast — in a real emergency, always follow guidance from local authorities, IMD and NDMA.</p>
+</footer>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ================= SHARED DATA & CONFIG ================= */
+const STATIONS = [
+  { id:'sohra',   name:'Sohra (Cherrapunji)', state:'Meghalaya',        lat:25.2841, lon:91.7168, x:150, y:305, slope:38, baseVibe:2.1 },
+  { id:'kohima',  name:'Kohima',              state:'Nagaland',         lat:25.6751, lon:94.1086, x:430, y:270, slope:33, baseVibe:3.4 },
+  { id:'gangtok', name:'Gangtok',             state:'Sikkim',           lat:27.3389, lon:88.6065, x:70,  y:95,  slope:42, baseVibe:2.8 },
+  { id:'itanagar',name:'Itanagar',            state:'Arunachal Pradesh',lat:27.0844, lon:93.6053, x:390, y:105, slope:36, baseVibe:4.1 },
+  { id:'aizawl',  name:'Aizawl',              state:'Mizoram',          lat:23.7271, lon:92.7176, x:340, y:400, slope:40, baseVibe:1.9 },
+  { id:'imphal',  name:'Imphal Hills',        state:'Manipur',          lat:24.8170, lon:93.9368, x:410, y:355, slope:31, baseVibe:2.4 },
+  { id:'haflong', name:'Haflong',             state:'Assam (hills)',    lat:25.1667, lon:93.0167, x:280, y:265, slope:29, baseVibe:2.0 },
+  { id:'ambassa', name:'Ambassa Hills',       state:'Tripura',          lat:23.9337, lon:91.8474, x:170, y:390, slope:27, baseVibe:1.6 },
+];
+
+const CONFIG = { alertThreshold:50, refreshInterval:45000, tempUnit:'C', defaultMode:'admin' };
+let refreshTimer = null;
+let data = {};
+
+function fmtTemp(c){
+  if(c === null || c === undefined) return '—';
+  return CONFIG.tempUnit==='C' ? c.toFixed(1)+'°C' : (c*9/5+32).toFixed(1)+'°F';
+}
+function riskColor(pct){
+  if(pct < 25) return getComputedStyle(document.documentElement).getPropertyValue('--low').trim();
+  if(pct < 50) return getComputedStyle(document.documentElement).getPropertyValue('--mod').trim();
+  if(pct < CONFIG.alertThreshold+25 && pct < 75) return getComputedStyle(document.documentElement).getPropertyValue('--high').trim();
+  if(pct < 75) return getComputedStyle(document.documentElement).getPropertyValue('--high').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--severe').trim();
+}
+function riskLabel(pct){
+  if(pct < 25) return {t:'Low', cls:'low'};
+  if(pct < 50) return {t:'Moderate', cls:'mod'};
+  if(pct < 75) return {t:'High', cls:'high'};
+  return {t:'Severe', cls:'severe'};
+}
+function clamp(v,min,max){return Math.max(min, Math.min(max, v));}
+
+async function fetchWeather(lat, lon){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,rain,relative_humidity_2m&timezone=auto`;
+    const res = await fetch(url);
+    const j = await res.json();
+    return { temp: j.current.temperature_2m, rain: j.current.rain ?? j.current.precipitation ?? 0, humidity: j.current.relative_humidity_2m };
+  }catch(e){
+    return { temp: 18 + Math.random()*10, rain: Math.random()*15, humidity: 60 + Math.random()*30 };
+  }
+}
+function computeRisk(slope, soil, vibe, rainMm){
+  const rainFactor = Math.min(rainMm / 18, 1) * 100;
+  const soilFactor = soil;
+  const slopeFactor = Math.min((slope - 20) / 25, 1) * 100;
+  const vibeFactor = Math.min(vibe / 8, 1) * 100;
+  const risk = 0.35*rainFactor + 0.25*soilFactor + 0.20*slopeFactor + 0.20*vibeFactor;
+  return Math.max(2, Math.min(98, Math.round(risk)));
+}
+
+/* ================= MODE SWITCH ================= */
+function setMode(mode){
+  document.getElementById('adminView').style.display = mode==='admin' ? 'block' : 'none';
+  document.getElementById('publicView').style.display = mode==='public' ? 'block' : 'none';
+  document.getElementById('modeAdminBtn').classList.toggle('active', mode==='admin');
+  document.getElementById('modePublicBtn').classList.toggle('active', mode==='public');
+  document.getElementById('brandSub').textContent = mode==='admin' ? 'Monitoring Console — Team View' : 'Public Website — Citizen View';
+}
+window.setMode = setMode;
+
+function toggleConfig(){
+  const p = document.getElementById('configPanel');
+  p.style.display = p.style.display==='block' ? 'none' : 'block';
+}
+window.toggleConfig = toggleConfig;
+
+function setUnit(u){
+  CONFIG.tempUnit = u;
+  document.getElementById('unitC').classList.toggle('active', u==='C');
+  document.getElementById('unitF').classList.toggle('active', u==='F');
+  renderDetail();
+}
+window.setUnit = setUnit;
+
+function setDefaultMode(m){
+  CONFIG.defaultMode = m;
+  document.getElementById('defAdmin').classList.toggle('active', m==='admin');
+  document.getElementById('defPublic').classList.toggle('active', m==='public');
+}
+window.setDefaultMode = setDefaultMode;
+
+document.getElementById('threshSlider').addEventListener('input', e=>{
+  CONFIG.alertThreshold = parseInt(e.target.value);
+  document.getElementById('threshVal').textContent = CONFIG.alertThreshold+'%';
+  document.getElementById('statAlertSub').textContent = `≥ ${CONFIG.alertThreshold}% risk`;
+});
+document.getElementById('refreshSelect').addEventListener('change', e=>{
+  CONFIG.refreshInterval = parseInt(e.target.value);
+  if(refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(refreshAll, CONFIG.refreshInterval);
+});
+
+/* ================= ADMIN VIEW LOGIC ================= */
+let selectedId = STATIONS[0].id;
+
+function initData(){
+  STATIONS.forEach(s=>{
+    data[s.id] = { soil: 30+Math.random()*40, vibe: s.baseVibe+Math.random()*1.5, temp:null, rain:0, humidity:null, risk:20 };
+  });
+}
+
+async function refreshAll(){
+  for(const s of STATIONS){
+    const w = await fetchWeather(s.lat, s.lon);
+    const d = data[s.id];
+    d.temp = w.temp; d.rain = w.rain; d.humidity = w.humidity;
+    d.soil = clamp(d.soil + (Math.random()-0.42)*6 + w.rain*0.8, 5, 100);
+    d.vibe = clamp(d.vibe + (Math.random()-0.5)*0.6, 0.2, 9);
+    const newRisk = computeRisk(s.slope, d.soil, d.vibe, d.rain);
+    if(Math.abs(newRisk - d.risk) >= 8) logAlert(s, d.risk, newRisk);
+    d.risk = newRisk;
+  }
+  renderMap(); renderDetail(); renderTable(); renderStats();
+  if(typeof leafletReady !== 'undefined' && leafletReady) updateLeafletMarker();
+}
+
+function logAlert(s, oldR, newR){
+  const el = document.getElementById('alertLog');
+  const dir = newR > oldR ? '↑' : '↓';
+  const row = document.createElement('div');
+  row.className = 'alert-row';
+  row.innerHTML = `<div class="alert-time">${new Date().toLocaleTimeString()}</div>
+    <div><b>${s.name}</b> risk ${dir} ${oldR}% → ${newR}% <span class="badge ${riskLabel(newR).cls}">${riskLabel(newR).t}</span></div>`;
+  el.prepend(row);
+  while(el.children.length > 8) el.removeChild(el.lastChild);
+  if(newR > oldR && newR >= CONFIG.alertThreshold) showToast(s, newR);
+}
+
+function showToast(s, risk){
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  const lbl = riskLabel(risk);
+  t.className = 'toast ' + (risk>=75 ? '' : 'mod');
+  t.innerHTML = `<div class="t-head"><span>⚠ ${lbl.t} risk — ${s.name}</span><span class="t-close" onclick="this.closest('.toast').remove()">✕</span></div>
+    <div>Cracking probability reached <b>${risk}%</b>. ${risk>=75 ? 'Consider notifying the emergency contact below.' : 'Keep monitoring this station closely.'}</div>`;
+  wrap.prepend(t);
+  setTimeout(()=>{ if(t.parentNode) t.remove(); }, 12000);
+  while(wrap.children.length > 4) wrap.removeChild(wrap.lastChild);
+}
+
+document.getElementById('testAlertBtn').addEventListener('click', ()=>{
+  const worst = [...STATIONS].sort((a,b)=> data[b.id].risk - data[a.id].risk)[0];
+  const d = data[worst.id];
+  const subject = encodeURIComponent(`[TEST ALERT] Landslide risk at ${worst.name} — ${d.risk}%`);
+  const body = encodeURIComponent(`This is a TEST alert from the NER Landslide Watch prototype.\n\nStation: ${worst.name}, ${worst.state}\nCracking probability: ${d.risk}%\nRainfall: ${d.rain.toFixed(1)} mm/h\nSoil moisture (sim.): ${d.soil.toFixed(0)}%\n\nNo real emergency is occurring — this demonstrates how the system would notify the response team.`);
+  window.location.href = `mailto:yashpandey-extc@atharvacoe.ac.in?subject=${subject}&body=${body}`;
+  showToast(worst, d.risk);
+});
+
+function showMapTab(which){
+  document.getElementById('tab2d').classList.toggle('active', which==='2d');
+  document.getElementById('tabMap').classList.toggle('active', which==='map');
+  document.getElementById('map2dWrap').style.display = which==='2d' ? 'block' : 'none';
+  document.getElementById('mapPane').style.display = which==='map' ? 'block' : 'none';
+  if(which==='map'){
+    initLeafletMap();
+    setTimeout(()=>{ leafletMap.invalidateSize(); }, 60);
+  }
+}
+window.showMapTab = showMapTab;
+
+function renderMap(){
+  const svg = document.getElementById('nerMap');
+  svg.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+  [{d:'M0,180 C120,140 220,210 340,170 C440,140 540,190 640,150 L640,0 L0,0 Z', op:0.05},
+   {d:'M0,260 C140,220 260,290 400,240 C500,210 580,260 640,230 L640,460 L0,460 Z', op:0.06}].forEach(p=>{
+    const el = document.createElementNS(ns,'path'); el.setAttribute('d', p.d); el.setAttribute('fill', '#7FAE8C'); el.setAttribute('opacity', p.op); svg.appendChild(el);
+  });
+  STATIONS.forEach(s=>{
+    const d = data[s.id]; const color = riskColor(d.risk); const r = 8 + (d.risk/100)*8;
+    if(d.risk >= 75){
+      const ring = document.createElementNS(ns,'circle');
+      ring.setAttribute('cx', s.x); ring.setAttribute('cy', s.y); ring.setAttribute('r', r+6);
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.5');
+      svg.appendChild(ring);
+    }
+    const dot = document.createElementNS(ns,'circle');
+    dot.setAttribute('cx', s.x); dot.setAttribute('cy', s.y); dot.setAttribute('r', r);
+    dot.setAttribute('fill', color); dot.setAttribute('class','station-dot');
+    dot.setAttribute('stroke', s.id===selectedId ? '#E8F1FA' : 'none'); dot.setAttribute('stroke-width', '2');
+    dot.addEventListener('click', ()=>{ selectedId = s.id; renderMap(); renderDetail(); renderTable(); });
+    svg.appendChild(dot);
+    const label = document.createElementNS(ns,'text');
+    label.setAttribute('x', s.x); label.setAttribute('y', s.y + r + 13); label.setAttribute('text-anchor','middle'); label.setAttribute('class','station-label');
+    label.textContent = s.name; svg.appendChild(label);
+  });
+}
+
+function renderDetail(){
+  const s = STATIONS.find(x=>x.id===selectedId); const d = data[s.id]; const lbl = riskLabel(d.risk);
+  const panel = document.getElementById('detailPanel');
+  panel.innerHTML = `
+    <p class="station-name">${s.name}</p>
+    <p class="station-meta">${s.state} · ${s.lat.toFixed(2)}°N, ${s.lon.toFixed(2)}°E</p>
+    <div class="risk-ring-wrap">
+      <svg width="86" height="86" viewBox="0 0 86 86">
+        <circle cx="43" cy="43" r="36" fill="none" stroke="#24425C" stroke-width="8"/>
+        <circle cx="43" cy="43" r="36" fill="none" stroke="${riskColor(d.risk)}" stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${2*Math.PI*36}" stroke-dashoffset="${2*Math.PI*36*(1-d.risk/100)}" transform="rotate(-90 43 43)"/>
+        <text x="43" y="39" text-anchor="middle" font-family="JetBrains Mono" font-size="18" font-weight="600" fill="#E8F1FA">${d.risk}%</text>
+        <text x="43" y="54" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#8FA9BF">CRACK RISK</text>
+      </svg>
+      <div>
+        <span class="badge ${lbl.cls}">${lbl.t} risk</span>
+        <p style="font-size:12px;color:var(--ink-dim);margin:8px 0 0;line-height:1.5;">
+          ${lbl.t==='Severe' ? 'Immediate field verification recommended.' : lbl.t==='High' ? 'Increase monitoring frequency at this station.' : lbl.t==='Moderate' ? 'Watch closely, especially after further rainfall.' : 'Conditions currently stable.'}
+        </p>
+      </div>
+    </div>
+    <div class="readouts">
+      <div class="readout"><div class="rl">RAINFALL (LIVE)</div><div class="rv">${d.rain.toFixed(1)} mm/h</div></div>
+      <div class="readout"><div class="rl">TEMPERATURE</div><div class="rv">${fmtTemp(d.temp)}</div></div>
+      <div class="readout"><div class="rl">SOIL MOISTURE (sim.)</div><div class="rv">${d.soil.toFixed(0)}%</div></div>
+      <div class="readout"><div class="rl">GROUND VIBRATION (sim.)</div><div class="rv">${d.vibe.toFixed(1)} mm/s</div></div>
+      <div class="readout"><div class="rl">SLOPE ANGLE</div><div class="rv">${s.slope}°</div></div>
+      <div class="readout"><div class="rl">HUMIDITY</div><div class="rv">${d.humidity!==null ? Math.round(d.humidity)+'%' : '—'}</div></div>
+    </div>
+    <div class="sat-note"><b>Satellite pass (simulated):</b> last overpass ${Math.floor(Math.random()*6)+1}h ago · cloud cover ${Math.floor(Math.random()*60)+10}% ·
+      surface displacement flag: ${d.risk>60 ? '<b style="color:var(--high)">minor shift detected</b>' : 'none detected'}.</div>`;
+}
+
+function renderTable(){
+  const sorted = [...STATIONS].sort((a,b)=> data[b.id].risk - data[a.id].risk);
+  document.getElementById('stationTable').innerHTML = sorted.map(s=>{
+    const d = data[s.id]; const lbl = riskLabel(d.risk);
+    return `<tr class="${s.id===selectedId?'selected':''}" onclick="selectStation('${s.id}')">
+      <td>${s.name}</td><td>${s.state}</td><td style="font-family:var(--mono)">${d.rain.toFixed(1)}</td>
+      <td><span class="badge ${lbl.cls}">${d.risk}% · ${lbl.t}</span></td></tr>`;
+  }).join('');
+}
+function selectStation(id){ selectedId = id; renderMap(); renderDetail(); renderTable(); if(typeof leafletReady !== 'undefined' && leafletReady) updateLeafletMarker(); }
+window.selectStation = selectStation;
+
+function renderStats(){
+  const worst = [...STATIONS].sort((a,b)=> data[b.id].risk - data[a.id].risk)[0];
+  document.getElementById('statHighest').textContent = worst.name;
+  document.getElementById('statHighestPct').textContent = data[worst.id].risk + '% cracking probability';
+  document.getElementById('statAlertCount').textContent = STATIONS.filter(s=>data[s.id].risk>=CONFIG.alertThreshold).length;
+  document.getElementById('statSat').textContent = Math.floor(Math.random()*4)+1 + 'h ago';
+}
+
+function tickClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }
+setInterval(tickClock, 1000); tickClock();
+
+/* ================= MAP VIEW (Leaflet, real geography) ================= */
+let leafletMap, leafletReady=false, stationMarkers={}, watchCircle;
+const WATCH_RADIUS_KM = 5;
+
+function riskPinIcon(color){
+  return L.divIcon({
+    className:'gmap-pin-icon',
+    html:`<div class="gmap-pin-wrap">
+      <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
+        <circle cx="15" cy="15" r="6" fill="#0B1210"/>
+      </svg>
+      <div class="gmap-pin-pulse" style="background:${color}"></div>
+    </div>`,
+    iconSize:[30,40], iconAnchor:[15,40]
+  });
+}
+
+function initLeafletMap(){
+  if(leafletReady) return; leafletReady = true;
+  const first = selectedId ? STATIONS.find(s=>s.id===selectedId) : STATIONS[0];
+  leafletMap = L.map('leafletMap', { zoomControl:false, attributionControl:true })
+    .setView([first.lat, first.lon], 11);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(leafletMap);
+
+  STATIONS.forEach(s=>{
+    const d = data[s.id]; const color = riskColor(d ? d.risk : 20);
+    const m = L.marker([s.lat, s.lon], { icon:riskPinIcon(color) }).addTo(leafletMap);
+    m.on('click', ()=> selectStation(s.id));
+    m.bindTooltip(`${s.name} — ${d?d.risk:'—'}%`, { direction:'top', offset:[0,-38] });
+    stationMarkers[s.id] = m;
+  });
+
+  document.getElementById('gmapZoomIn').addEventListener('click', ()=> leafletMap.zoomIn());
+  document.getElementById('gmapZoomOut').addEventListener('click', ()=> leafletMap.zoomOut());
+
+  updateLeafletMarker();
+}
+
+function updateLeafletMarker(){
+  STATIONS.forEach(s=>{
+    const d = data[s.id]; if(!d || !stationMarkers[s.id]) return;
+    stationMarkers[s.id].setIcon(riskPinIcon(riskColor(d.risk)));
+  });
+  if(!leafletReady) return;
+  const s = STATIONS.find(x=>x.id===selectedId) || STATIONS[0];
+  const d = data[s.id];
+  const color = riskColor(d ? d.risk : 20);
+
+  if(watchCircle) leafletMap.removeLayer(watchCircle);
+  watchCircle = L.circle([s.lat, s.lon], { radius:WATCH_RADIUS_KM*1000, color, weight:1.5, fillColor:color, fillOpacity:0.08 }).addTo(leafletMap);
+  leafletMap.panTo([s.lat, s.lon]);
+
+  document.getElementById('gmapBadge').textContent = WATCH_RADIUS_KM + ' km watch radius';
+  document.getElementById('gmapDot').style.background = color;
+  document.getElementById('gmapName').textContent = s.name;
+  document.getElementById('gmapSub').textContent = `${s.state} · ${s.lat.toFixed(4)}°N, ${s.lon.toFixed(4)}°E · ${d?d.risk:'—'}% risk`;
+  document.getElementById('gmapOpen').href = `https://www.google.com/maps?q=${s.lat},${s.lon}`;
+}
+
+/* ================= PUBLIC VIEW LOGIC (Maps-style search) ================= */
+const locInput = document.getElementById('locInput');
+const locSugg = document.getElementById('locSuggestions');
+const locClear = document.getElementById('locClear');
+const gpsBtn = document.getElementById('gpsBtn');
+const chosenPill = document.getElementById('chosenPill');
+const chosenPillText = document.getElementById('chosenPillText');
+
+let chosenCoords = null;
+let highlightIdx = -1;
+
+document.getElementById('fileInput').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const img = document.getElementById('preview'); img.src = URL.createObjectURL(file); img.style.display='block';
+});
+
+function setChosen(coords, label){
+  chosenCoords = coords;
+  chosenPillText.textContent = label;
+  chosenPill.classList.toggle('show', !!coords);
+  locClear.style.display = locInput.value ? 'block' : 'none';
+}
+
+function renderSuggestions(query){
+  const q = (query||'').trim().toLowerCase();
+  const matches = STATIONS.filter(s => !q || s.name.toLowerCase().includes(q) || s.state.toLowerCase().includes(q));
+  highlightIdx = -1;
+  if(!matches.length){
+    locSugg.innerHTML = '<div class="maps-sugg-empty">No matching areas — try a different name.</div>';
+    locSugg.classList.add('open');
+    return;
+  }
+  locSugg.innerHTML = matches.map((s,i)=>{
+    const risk = data[s.id] ? data[s.id].risk : null;
+    const lbl = risk!==null ? riskLabel(risk) : null;
+    return `<div class="maps-sugg-item" data-idx="${STATIONS.indexOf(s)}">
+      <div class="pin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <div class="sugg-text"><div class="sugg-main">${s.name}</div><div class="sugg-sub">${s.state} · ${s.lat.toFixed(2)}°N, ${s.lon.toFixed(2)}°E</div></div>
+      ${lbl ? `<span class="sugg-risk badge ${lbl.cls}">${risk}%</span>` : ''}
+    </div>`;
+  }).join('');
+  locSugg.classList.add('open');
+  locSugg.querySelectorAll('.maps-sugg-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const s = STATIONS[parseInt(item.dataset.idx)];
+      locInput.value = `${s.name}, ${s.state}`;
+      setChosen({ lat:s.lat, lon:s.lon, name:`${s.name}, ${s.state}`, slope:s.slope }, `${s.name}, ${s.state}`);
+      locSugg.classList.remove('open');
+    });
+  });
+}
+
+locInput.addEventListener('focus', ()=> renderSuggestions(locInput.value));
+locInput.addEventListener('input', ()=>{
+  chosenCoords = null; chosenPill.classList.remove('show');
+  locClear.style.display = locInput.value ? 'block' : 'none';
+  renderSuggestions(locInput.value);
+});
+locInput.addEventListener('keydown', e=>{
+  const items = [...locSugg.querySelectorAll('.maps-sugg-item')];
+  if(!items.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); highlightIdx = Math.min(highlightIdx+1, items.length-1); items.forEach((it,i)=>it.classList.toggle('hi', i===highlightIdx)); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); highlightIdx = Math.max(highlightIdx-1, 0); items.forEach((it,i)=>it.classList.toggle('hi', i===highlightIdx)); }
+  else if(e.key==='Enter'){ e.preventDefault(); if(highlightIdx>=0) items[highlightIdx].click(); }
+  else if(e.key==='Escape'){ locSugg.classList.remove('open'); }
+});
+document.addEventListener('click', e=>{
+  if(!document.getElementById('mapsSearch').contains(e.target)) locSugg.classList.remove('open');
+});
+locClear.addEventListener('click', ()=>{
+  locInput.value=''; chosenCoords=null; chosenPill.classList.remove('show'); locClear.style.display='none'; locInput.focus(); renderSuggestions('');
+});
+gpsBtn.addEventListener('click', ()=>{
+  if(!navigator.geolocation){ alert('Location not available in this browser.'); return; }
+  gpsBtn.classList.add('active');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const coords = { lat:pos.coords.latitude, lon:pos.coords.longitude, name:'Your current location', slope:30+Math.random()*12 };
+    locInput.value = 'Your current location';
+    setChosen(coords, `Your current location (${coords.lat.toFixed(3)}°N, ${coords.lon.toFixed(3)}°E)`);
+    locSugg.classList.remove('open');
+  }, ()=>{ alert('Could not get your location — please search for an area instead.'); gpsBtn.classList.remove('active'); });
+});
+
+document.getElementById('checkBtn').addEventListener('click', async ()=>{
+  if(!chosenCoords){ alert('Please choose an area or use your location first.'); return; }
+  const btn = document.getElementById('checkBtn'); btn.disabled=true; btn.textContent='Checking…';
+  const w = await fetchWeather(chosenCoords.lat, chosenCoords.lon);
+  const soilFactor = Math.min(w.rain*4 + Math.random()*20, 100);
+  const slopeFactor = Math.min(((chosenCoords.slope||30)-20)/25, 1)*100;
+  const risk = Math.max(3, Math.min(97, Math.round(0.45*Math.min(w.rain/15,1)*100 + 0.3*soilFactor*0.4 + 0.25*slopeFactor)));
+  const lbl = riskLabel(risk);
+  document.getElementById('resName').textContent = chosenCoords.name;
+  document.getElementById('resCoords').textContent = `${chosenCoords.lat.toFixed(3)}°N, ${chosenCoords.lon.toFixed(3)}°E`;
+  document.getElementById('resPill').textContent = lbl.t + ' risk';
+  document.getElementById('resPill').className = 'risk-pill ' + lbl.cls;
+  document.getElementById('resTemp').textContent = fmtTemp(w.temp);
+  document.getElementById('resRain').textContent = w.rain.toFixed(1) + ' mm';
+  document.getElementById('resRisk').textContent = risk + '%';
+  const advice = document.getElementById('resAdvice');
+  if(risk>=75) advice.innerHTML = '<b>What this means:</b> Conditions in this model resemble those seen before slope failures. If you notice new cracks, tilting trees/fences, or muddy water, move to safer ground and inform local authorities immediately.';
+  else if(risk>=50) advice.innerHTML = '<b>What this means:</b> Rainfall and slope conditions suggest raised risk. Avoid staying near steep slopes during and after heavy rain.';
+  else if(risk>=25) advice.innerHTML = '<b>What this means:</b> Conditions are moderate. Stay alert during monsoon and after prolonged rainfall.';
+  else advice.innerHTML = '<b>What this means:</b> Conditions currently look stable in this model. Recheck after heavy rain.';
+  document.getElementById('alertBanner').style.display = risk >= CONFIG.alertThreshold ? 'block' : 'none';
+  document.getElementById('results').style.display = 'block';
+  btn.disabled=false; btn.textContent='Check landslide risk';
+});
+
+/* ================= INIT ================= */
+initData();
+setMode(CONFIG.defaultMode);
+renderMap(); renderDetail(); renderTable();
+refreshAll();
+refreshTimer = setInterval(refreshAll, CONFIG.refreshInterval);
+</script>
+</body>
+</html>
